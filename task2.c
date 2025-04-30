@@ -17,12 +17,14 @@ void to_lowercase_buf(char* dst, const char* src, size_t len) {
 
 int buffer_contains_word(const char* buf, size_t size, const char* word, int ignore_case) {
     size_t word_len = strlen(word);
-    if (word_len > size) return 0;
+    if (word_len > size) 
+        return 0;
 
     if (ignore_case) {
         char* lower_buf = malloc(size);
         char* lower_word = strdup(word);
-        if (!lower_buf || !lower_word) return 0;
+        if (!lower_buf || !lower_word) 
+            return 0;
 
         to_lowercase_buf(lower_buf, buf, size);
         to_lowercase_buf(lower_word, word, word_len);
