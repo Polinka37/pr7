@@ -26,36 +26,41 @@ int contains_word(const char* line, const char* word, int ignore_case) {
     return result;
 }
 
-void search_in_file(const char* filepath, const char* word, int ignore_case) {
+int search_in_file(const char* filepath, const char* word, int ignore_case) {
     FILE* file = fopen(filepath, "r");
     if (!file) {
         fprintf(stderr, "Не удалось открыть файл: %s (%s)\n", filepath, strerror(errno));
-        return;
+        return 0;
     }
 
     char* line = NULL;
     size_t len = 0;
     int lineno = 0;
+    int found = 0;
 
     while (getline(&line, &len, file) != -1) {
         lineno++;
         if (contains_word(line, word, ignore_case)) {
             printf("%s:%d: %s", filepath, lineno, line);
+            found = 1;
         }
     }
 
     free(line);
     fclose(file);
+    return found;
 }
 
-void search_directory(const char* dirpath, const char* word, int ignore_case) {
+int search_directory(const char* dirpath, const char* word, int ignore_case) {
     DIR* dir = opendir(dirpath);
     if (!dir) {
         fprintf(stderr, "Не удалось открыть директорию: %s (%s)\n", dirpath, strerror(errno));
-        return;
+        return 0;
     }
 
     struct dirent* entry;
+    int found_any = 0;
+
     while ((entry = readdir(dir)) != NULL) {
         if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
 
@@ -69,13 +74,14 @@ void search_directory(const char* dirpath, const char* word, int ignore_case) {
         }
 
         if (S_ISDIR(st.st_mode)) {
-            search_directory(fullpath, word, ignore_case);
+            found_any |= search_directory(fullpath, word, ignore_case);
         } else if (S_ISREG(st.st_mode)) {
-            search_in_file(fullpath, word, ignore_case);
+            found_any |= search_in_file(fullpath, word, ignore_case);
         }
     }
 
     closedir(dir);
+    return found_any;
 }
 
 int main(int argc, char* argv[]) {
@@ -95,19 +101,24 @@ int main(int argc, char* argv[]) {
     }
 
     target_word = argv[arg_index++];
-    search_dir = (arg_index < argc) ? argv[arg_index] : getenv("HOME");
+    search_dir = (arg_index < argc) ? argv[arg_index] : "~/files";
 
-    char default_path[4096];
-    if (!search_dir) {
-        fprintf(stderr, "Ошибка: не удалось определить домашнюю директорию\n");
-        return 1;
+    char resolved_path[4096];
+    if (strncmp(search_dir, "~", 1) == 0) {
+        const char* home = getenv("HOME");
+        if (!home) {
+            fprintf(stderr, "Ошибка: не удалось определить домашнюю директорию\n");
+            return 1;
+        }
+        snprintf(resolved_path, sizeof(resolved_path), "%s%s", home, search_dir + 1);
+        search_dir = resolved_path;
     }
 
-    if (strcmp(search_dir, "~") == 0) {
-        snprintf(default_path, sizeof(default_path), "%s/files", getenv("HOME"));
-        search_dir = default_path;
+    int found_total = search_directory(search_dir, target_word, ignore_case);
+    if (!found_total) {
+        printf("Слово \"%s\" не найдено ни в одном файле.\n", target_word);
     }
 
-    search_directory(search_dir, target_word, ignore_case);
     return 0;
 }
+
